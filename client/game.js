@@ -12,6 +12,13 @@
 //
 //=============================================================================
 
+// const Primus = require("primus");
+// const ws = new Primus('ws://localhost:3000/primus');
+// ws.on('data', (data) => {
+//   console.log('DATA RECEIVED');
+//   console.log(data);
+// })
+
 if (!Function.prototype.bind) {
   Function.prototype.bind = function(obj) {
     var slice = [].slice,
@@ -80,9 +87,9 @@ Game = {
            Game.ua.hasCanvas
   },
 
-  start: function(id, game, cfg) {
+  start: function(id, game, cfg, socket) {
     if (Game.compatible())
-      return Object.construct(Game.Runner, id, game, cfg).game; // return the game instance, not the runner (caller can always get at the runner via game.runner)
+      return Object.construct(Game.Runner, id, game, cfg, socket).game; // return the game instance, not the runner (caller can always get at the runner via game.runner)
   },
 
   ua: function() { // should avoid user agent sniffing... but sometimes you just gotta do what you gotta do
@@ -190,7 +197,7 @@ Game = {
 
   Runner: {
 
-    initialize: function(id, game, cfg) {
+    initialize: function(id, game, cfg, socket) {
       this.cfg          = Object.extend(game.Defaults || {}, cfg || {}); // use game defaults (if any) and extend with custom cfg (if any)
       this.fps          = this.cfg.fps || 60;
       this.interval     = 1000.0 / this.fps;
@@ -205,15 +212,22 @@ Game = {
       this.back.height  = this.height;
       this.front2d      = this.front.getContext('2d');
       this.back2d       = this.back.getContext('2d');
+      this.socket       = socket;
       this.addEvents();
       this.resetStats();
 
-      this.game = Object.construct(game, this, this.cfg); // finally construct the game object itself
+      this.game = Object.construct(game, this, this.cfg, this.socket); // finally construct the game object itself
     },
 
     start: function() { // game instance should call runner.start() when its finished initializing and is ready to start the game loop
       this.lastFrame = Game.timestamp();
       this.timer     = setInterval(this.loop.bind(this), this.interval);
+      this.loop.bind(this);
+    },
+
+    looperFromServer: function(lastFrame){
+      // this.lastFrame = lastFrame;//Game.timestamp();
+      // this.loop();
     },
 
     stop: function() {
@@ -221,6 +235,7 @@ Game = {
     },
 
     loop: function() {
+      // this.socket.on('updateGameFrame')
       var start  = Game.timestamp(); this.update((start - this.lastFrame)/1000.0); // send dt as seconds
       var middle = Game.timestamp(); this.draw();
       var end    = Game.timestamp();
@@ -274,8 +289,28 @@ Game = {
       Game.addEvent(document, 'keyup',   this.onkeyup.bind(this));
     },
 
-    onkeydown: function(ev) { if (this.game.onkeydown) this.game.onkeydown(ev.keyCode); },
-    onkeyup:   function(ev) { if (this.game.onkeyup)   this.game.onkeyup(ev.keyCode);   },
+     // Testing this part
+    /*onkeydown: function(ev) { if (this.game.onkeydown) this.game.onkeydown(ev.keyCode); },
+    onkeyup:   function(ev) { if (this.game.onkeyup)   this.game.onkeyup(ev.keyCode);   },*/
+    onkeydown: function(ev) {
+        if (this.game.onkeydown) {
+          if (ev.keyCode == Game.KEY.ZERO || ev.keyCode == Game.KEY.ONE || ev.keyCode == Game.KEY.TWO || ev.keyCode == Game.KEY.ESC )
+            this.socket.write({'eventName':'gameStartEvents', 'key':ev.keyCode});
+            // this.socket.emit('gameStartEvents', ev.keyCode);
+
+          else
+            this.socket.write({'eventName':'keyPressed', 'key':ev.keyCode, 'roomName': this.socket.roomName});
+            // this.socket.emit('keyPressed', ev.keyCode);
+          // this.game.onkeydown(ev.keyCode);
+        }
+      },
+    onkeyup:   function(ev) {
+        if (this.game.onkeyup) {
+          this.socket.write({'eventName':'keyReleased', 'key':ev.keyCode, 'roomName': this.socket.roomName});
+          // this.socket.emit('keyReleased', ev.keyCode);
+          // this.game.onkeyup(ev.keyCode);
+        }
+      },
 
     hideCursor: function() { this.canvas.style.cursor = 'none'; },
     showCursor: function() { this.canvas.style.cursor = 'auto'; },
@@ -292,6 +327,24 @@ Game = {
       result = window.confirm(msg);
       this.start();
       return result;
+    },
+
+    keyPressedFromServer: function(data) {
+      console.log("Message from server " + data);
+      this.game.onkeydown(data);
+    },
+
+    keyReleasedFromServer: function(data) {
+      console.log("Message from server " + data);
+      this.game.onkeyup(data);
+    },
+
+    displayRoomList: function(data) {
+      this.game.displayRoomList(data);
+    },
+
+    startDoublePlayer: function(){
+      this.game.startDoublePlayer();
     }
 
     //-------------------------------------------------------------------------

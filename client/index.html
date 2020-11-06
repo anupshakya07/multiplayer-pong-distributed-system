@@ -1,9 +1,21 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html>
 <head>
   <title>Pong!</title> 
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> 
-  <link href="../client/pong.css" media="screen, print" rel="stylesheet" type="text/css" />
+  <link href="/client/pong.css" media="screen, print" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.socket.io/socket.io-2.3.0.js"></script>
+<!--  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>-->
+  <script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.11.1/jquery-ui.min.js"></script>
+  <script src="/client/game.js" type="text/javascript"></script>
+  <script src="/client/pong.js" type="text/javascript"></script>
+<!--  <script src="https://cdn.jsdelivr.net/npm/primus@8.0.0/primus.js"></script>-->
+  <!--  <script src="../client/game.js" type="text/javascript"></script>-->
+  <!--  <script src="../client/pong.js" type="text/javascript"></script>-->
+<!--  <script src="/primus/primus.io.js" type="text/javascript"></script>-->
+  <script src="/primus/primus.js" type="text/javascript"></script>
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.11.1/themes/smoothness/jquery-ui.css" />
 </head> 
  
 <body> 
@@ -55,10 +67,15 @@
       Sorry, this example cannot be run because your browser does not support the &lt;canvas&gt; element
     </div>
   </canvas>
+<!--  <canvas id="ctx" width="500" height="500" style="border:1px solid #FFFFAD;"></canvas>-->
 
-  <script src="../client/game.js" type="text/javascript"></script>
-  <script src="../client/pong.js" type="text/javascript"></script>
   <script type="text/javascript">
+
+    // var socket = io();
+    // var Primus = require("primus");
+    const socket = new Primus('ws://localhost:8000/primus');
+
+    socket.write("Hello From Client");
   Game.ready(function() {
 
     var size        = document.getElementById('size');
@@ -72,6 +89,53 @@
       stats:       stats.checked,
       footprints:  footprints.checked,
       predictions: predictions.checked
+    }, socket);
+
+    socket.on('data', function (data){
+      switch (data.eventName) {
+        case "message":
+          console.log("Message From Server: ", data.message);
+          break;
+        case "keyPressedFromServer":
+          pong.runner.keyPressedFromServer(data.key);
+          break;
+        case "keyReleasedFromServer":
+          pong.runner.keyReleasedFromServer(data.key);
+          break;
+        case "gameplayEventFromServer":
+          pong.updatePlayerFromServer(data.player, data);
+          break;
+        case "updateBallPositionFromServer":
+          pong.ball.setposFromServer(data.ball_x, data.ball_y);
+          break;
+        case "roomList":
+          pong.runner.displayRoomList(data.roomNames);
+          break;
+        case "startMultiPlayerGameFromServer":
+          socket.roomName = data.roomName;
+          pong.runner.startDoublePlayer();
+          break;
+
+
+      }
+    });
+    socket.on('keyPressedFromServer', function (data){
+      pong.runner.keyPressedFromServer(data);
+    });
+    socket.on('keyReleasedFromServer', function (data){
+      pong.runner.keyReleasedFromServer(data);
+    });
+    socket.on('gameplayEventFromServer', function(data){
+      pong.updatePlayerFromServer(data.player,data)
+    });
+    socket.on('roomList', function(roomNames){
+      pong.runner.displayRoomList(roomNames);
+    });
+    socket.on('startDoublePlayer', function(){
+      pong.runner.startDoublePlayer();
+    });
+    socket.on('updateBallPositionFromServer', function(ballPosition){
+      pong.ball.setposFromServer(ballPosition.ball_x, ballPosition.ball_y);
     });
 
     Game.addEvent(sound,       'change', function() { pong.enableSound(sound.checked);           });

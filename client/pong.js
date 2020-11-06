@@ -54,7 +54,7 @@ Pong = {
 
   //-----------------------------------------------------------------------------
 
-  initialize: function(runner, cfg) {
+  initialize: function(runner, cfg, socket) {
     Game.loadImages(Pong.Images, function(images) {
       this.cfg         = cfg;
       this.runner      = runner;
@@ -76,13 +76,69 @@ Pong = {
   startDemo:         function() { this.start(0); },
   startSinglePlayer: function() { this.start(1); },
   startDoublePlayer: function() { this.start(2); },
+  initializeDoublePlayerGame: function() {
+    if (confirm("Do you want to host a game?")){
+      this.isHost = true;
+      this.isGuest = false;
+
+      var roomName = prompt("Enter enter a name for your room: ");
+      // this.runner.socket.emit("createRoom",roomName, function(){console.log("Room Created")})
+      // this.runner.socket.write({"eventName":"createRoom", "roomName": roomName, "callback":function(){console.log("Room Created")}});
+      this.runner.socket.write({"eventName":"create", "roomName":roomName});
+
+    }
+    else{
+      this.isHost = false;
+      this.isGuest = true;
+      // this.runner.socket.emit("getRoomNames");
+      this.runner.socket.write({"eventName":"getRoomNames"});
+    }
+    // this.start(2);
+    },
+  displayRoomList: function(roomNames){
+    console.log(roomNames);
+    var markup = "<h1>Select a room to enter</h1>";
+    markup += "<select id='roomSelect'>"
+    markup += "<option value='' selected>-Select-</option>";
+    for (room in roomNames){
+      var roomName = roomNames[room].name;
+      var roomId = roomNames[room].id;
+      markup += "<option value=" + roomId + ">" + roomName + "</option>";
+    }
+    markup += "</select>"
+
+    const currentSocket = this.runner.socket;
+    const $roomSelectDialog = $("<div>").html(markup).dialog({
+      title: "Select Game Room",
+      modal: true,
+      autoOpen: false,
+      width: 500,
+      resizable: false,
+      buttons:{
+        OK: function(){
+          $(this).dialog("close");
+          if ($("#roomSelect").val()) {
+            // testFunc($("#roomSelect").val());
+            // currentSocket.emit('joinRoom', $("#roomSelect").val(), function(){ this.start(2);})
+            currentSocket.write({"eventName":"join","roomName":$("#roomSelect").val()});
+          }
+        }
+      },
+      open: function(event, ui){
+        $roomSelectDialog.html(markup);
+      },
+      close: function(event, ui){
+        //do sth
+        console.log("Dialog Closed");
+      }
+    });
+    $roomSelectDialog.dialog("open");
+  },
 
   start: function(numPlayers) {
     if (!this.playing) {
       this.scores = [0, 0];
       this.playing = true;
-      // this.isGuest = true;
-      // this.isHost = false;
       this.leftPaddle.setAuto(numPlayers < 1, this.level(0));
       this.rightPaddle.setAuto(numPlayers < 2, this.level(1));
       this.ball.reset();
@@ -151,19 +207,49 @@ Pong = {
   },
 
   onkeydown: function(keyCode) {
+    // this.runner.socket.emit('keyPressed', keyCode);
     switch(keyCode) {
-      case Game.KEY.ZERO: this.startDemo();            break;
-      case Game.KEY.ONE:  this.startSinglePlayer();    break;
-      case Game.KEY.TWO:  this.startDoublePlayer();    break;
-      case Game.KEY.ESC:  this.stop(true);             break;
-      case Game.KEY.Q:    if (!this.leftPaddle.auto)  this.leftPaddle.moveUp();    break;
-      case Game.KEY.A:    if (!this.leftPaddle.auto)  this.leftPaddle.moveDown();  break;
-      case Game.KEY.P:    if (!this.rightPaddle.auto) this.rightPaddle.moveUp();   break;
-      case Game.KEY.L:    if (!this.rightPaddle.auto) this.rightPaddle.moveDown(); break;
+      case Game.KEY.ZERO:
+        this.startDemo();
+        break;
+
+      case Game.KEY.ONE:
+        this.startSinglePlayer();
+        break;
+
+      case Game.KEY.TWO:
+        // this.runner.socket.emit('keyPressed', Game.KEY.TWO);
+        this.initializeDoublePlayerGame();
+        break;
+
+      case Game.KEY.ESC:
+        this.stop(true);
+        break;
+
+      case Game.KEY.Q:
+        if (this.isHost && !this.leftPaddle.auto)
+          this.leftPaddle.moveUp();
+        break;
+
+      case Game.KEY.A:
+        if (this.isHost && !this.leftPaddle.auto)
+          this.leftPaddle.moveDown();
+        break;
+
+      case Game.KEY.P:
+        if (this.isGuest && !this.rightPaddle.auto)
+          this.rightPaddle.moveUp();
+        break;
+
+      case Game.KEY.L:
+        if (this.isGuest && !this.rightPaddle.auto)
+          this.rightPaddle.moveDown();
+        break;
     }
   },
 
   onkeyup: function(keyCode) {
+    this.runner.socket.emit('keyRelease',"key released hai!!");
     switch(keyCode) {
       case Game.KEY.Q: if (!this.leftPaddle.auto)  this.leftPaddle.stopMovingUp();    break;
       case Game.KEY.A: if (!this.leftPaddle.auto)  this.leftPaddle.stopMovingDown();  break;
@@ -176,6 +262,32 @@ Pong = {
   showFootprints:  function(on) { this.cfg.footprints = on; this.ball.footprints = []; },
   showPredictions: function(on) { this.cfg.predictions = on; },
   enableSound:     function(on) { this.cfg.sound = on; },
+
+  updatePlayerFromServer: function(playerNo, data){
+    if (playerNo == 'player1'){
+      this.updatePaddleFromServer(this.leftPaddle, data)
+    }
+    else if (playerNo == 'player2') {
+      this.updatePaddleFromServer(this.rightPaddle, data)
+    }
+  },
+
+  updatePaddleFromServer: function(paddle, data){
+    const dir = data.direction;
+    console.log("Paddle Direction ", dir)
+    if (!paddle.auto){
+      if (dir == "up"){
+        paddle.moveUp();
+      }
+      else if (dir == "down"){
+        paddle.moveDown();
+      }
+      else if (dir == null || dir == "stop"){
+        paddle.stopMovingUp();
+        paddle.stopMovingDown();
+      }
+    }
+  },
 
   //=============================================================================
   // MENU
@@ -321,6 +433,7 @@ Pong = {
       this.width  = pong.cfg.paddleWidth;
       this.height = pong.cfg.paddleHeight;
       this.minY   = pong.cfg.wallWidth;
+      this.playerNo = rhs? 'player2': 'player1';
       this.maxY   = pong.height - pong.cfg.wallWidth - this.height;
       this.speed  = (this.maxY - this.minY) / pong.cfg.paddleSpeed;
       this.setpos(rhs ? pong.width - this.width : 0, this.minY + (this.maxY - this.minY)/2);
@@ -328,6 +441,9 @@ Pong = {
     },
 
     setpos: function(x, y) {
+      // if (!this.auto) {
+      //   this.pong.runner.socket.emit('paddlePosition',{'player':this.playerNo, 'paddle_x': x, 'paddle_y': y})
+      // }
       this.x      = x;
       this.y      = y;
       this.left   = this.x;
@@ -369,6 +485,11 @@ Pong = {
         else if (y > this.maxY)
           y = this.maxY;
         this.setpos(this.x, y);
+        // const paddlePosition = {};
+        // paddlePosition.x = this.x;
+        // paddlePosition.y = y;
+        // paddlePosition.playerNo = this.playerNo;
+        // this.socket.emit("paddlePosition", paddlePosition);
       }
     },
 
@@ -482,6 +603,16 @@ Pong = {
     },
 
     setpos: function(x, y) {
+      // this.pong.runner.socket.emit('ballPosition', {'ball_x':x, 'ball_y':y});
+      this.pong.runner.socket.write({'eventName':'ballPosition','ball_x':x, 'ball_y':y, 'roomName':this.pong.runner.socket.roomName});
+      // this.x      = x;
+      // this.y      = y;
+      // this.left   = this.x - this.radius;
+      // this.top    = this.y - this.radius;
+      // this.right  = this.x + this.radius;
+      // this.bottom = this.y + this.radius;
+    },
+    setposFromServer: function(x,y){
       this.x      = x;
       this.y      = y;
       this.left   = this.x - this.radius;
