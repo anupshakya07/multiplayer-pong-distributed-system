@@ -163,7 +163,14 @@ Pong = {
 
   goal: function(playerNo) {
     this.sounds.goal();
-    this.scores[playerNo] += 1;
+    // this.scores[playerNo] += 1;
+    var score_player1 = this.scores[0];
+    var score_player2 = this.scores[1];
+    if (playerNo == 0)
+      score_player1 += 1;
+    else if (playerNo == 1)
+      score_player2 += 1;
+    this.runner.socket.write({"eventName":"gameScore", "score_player1": score_player1, "score_player2": score_player2, "roomName": this.runner.socket.roomName});
     if (this.scores[playerNo] == 9) {
       this.menu.declareWinner(playerNo);
       this.stop();
@@ -173,6 +180,10 @@ Pong = {
       this.leftPaddle.setLevel(this.level(0));
       this.rightPaddle.setLevel(this.level(1));
     }
+  },
+  updateScores: function(score_player1, score_player2){
+    this.scores[0] = score_player1;
+    this.scores[1] = score_player2;
   },
 
   update: function(dt) {

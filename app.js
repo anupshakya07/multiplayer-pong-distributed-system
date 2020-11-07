@@ -51,18 +51,14 @@ primus.ROOMS = {};
 
 primus.on('connection', (ws)=>{
     console.log("CONNECTED to ", port, " id: ", ws.id);
-    var socket = ws.socket;
     ws.player = 'player1'; //By default, the player is player 1, can change later.
 
-    console.log('socket communication');
     primus.SOCKET_LIST[ws.id] = ws;
     console.log('New Socket Added');
     console.log('Number of Active connections:' + Object.keys(primus.SOCKET_LIST).length);
 
     ws.on('data', (data)=>{
         console.log("Okay Data Received.", data);
-        // console.log("Primus Sock Value: ", primus.SOCK);
-
         switch(data.eventName){
             case "gameStartEvents":
                 ws.write({'eventName':'keyPressedFromServer', 'key':data.key});
@@ -233,6 +229,18 @@ primus.on('connection', (ws)=>{
                     if (clients.length == 2)
                         ws.room(room).write({"eventName":"startMultiPlayerGameFromServer", "roomName":room});
                 });
+                break;
+            case "gameScore":
+                if (data.roomName != undefined){
+                    var roomName = data.roomName;
+                    if (roomName != undefined){
+                        if (ws.player == 'player1'){
+                            ws.room(roomName).write({"eventName":"updateScoreFromServer", "score_player1": data.score_player1, "score_player2": data.score_player2});
+                        }
+                    }
+                }
+                else
+                    ws.write({"eventName":"updateScoreFromServer", "score_player1": data.score_player1, "score_player2": data.score_player2});
                 break;
         }
     });

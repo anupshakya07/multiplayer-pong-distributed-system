@@ -75,7 +75,6 @@
     // var Primus = require("primus");
     const socket = new Primus('ws://localhost:8000/primus');
 
-    socket.write("Hello From Client");
   Game.ready(function() {
 
     var size        = document.getElementById('size');
@@ -114,6 +113,9 @@
         case "startMultiPlayerGameFromServer":
           socket.roomName = data.roomName;
           pong.runner.startDoublePlayer();
+          break;
+        case "updateScoreFromServer":
+          pong.updateScores(data.score_player1, data.score_player2);
           break;
 
 
